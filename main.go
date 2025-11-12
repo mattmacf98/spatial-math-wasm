@@ -1,3 +1,4 @@
+// for functionality we want to turn into WASM, we need this entry point file to map the values from JS , through go and back to JS (we could have a single one for all rdk we want to WASMize or split out into one per repo (or these could be in the repos themselves)
 package main
 
 import (
@@ -25,5 +26,5 @@ func quatToOv(this js.Value, args []js.Value) any {
 
 func main() {
 	js.Global().Set("quatToOv", js.FuncOf(quatToOv))
-	<-make(chan bool)
+	select {}
 }

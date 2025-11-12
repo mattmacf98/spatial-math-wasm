@@ -1,3 +1,4 @@
+// This serves as the dummy version of what spatial math could look like if we take out the dependency on the rdk utils (which is not WASM compilable)
 package main
 
 import (
