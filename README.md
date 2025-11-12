@@ -13,3 +13,8 @@
 ```
 
 we could probably refactor a lot of the functions we need out but might/ mark files as not to be compiled for WASM in rdk but will be a lot
+
+# TODO
+
+1. build out an example svelte kit app that uses this spatial math and properly gets the decleration
+2. assess what actual functions we need to call for our P0 scope
