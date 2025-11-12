@@ -1,0 +1,17 @@
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <script src="wasm_exec.js"></script>
+        <script>
+            async function loadWasm() {
+                const go = new Go();
+                const res = await WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject);
+                go.run(res.instance);
+                const result = quatToOv(0, 1, 0, 0);
+                console.log(result);
+            }
+            loadWasm();
+        </script>
+    </head>
+    <body></body>
+</html>
