@@ -2,119 +2,125 @@
 package main
 
 import (
-	"math"
+	"fmt"
 
-	"github.com/go-gl/mathgl/mgl64"
+	"go.viam.com/rdk/referenceframe"
+	"go.viam.com/rdk/spatialmath"
+	"gonum.org/v1/gonum/num/dualquat"
 	"gonum.org/v1/gonum/num/quat"
+
+	"github.com/golang/geo/r3"
 )
 
-const orientationVectorPoleRadius = 0.0001
-const defaultAngleEpsilon = 1e-4
-
-type R4AA struct {
-	Theta float64 `json:"th"`
-	RX    float64 `json:"x"`
-	RY    float64 `json:"y"`
-	RZ    float64 `json:"z"`
+type Pose interface {
+	Point() r3.Vector
+	Orientation() Orientation
 }
 
-func (r4 *R4AA) Normalize() {
-	norm := math.Sqrt(r4.RX*r4.RX + r4.RY*r4.RY + r4.RZ*r4.RZ)
-	if norm == 0.0 { // prevent division by 0
-		panic("cannot normalize R4AA, divide by zero")
+type Quaternion quat.Number
+type DualQuaternion struct {
+	dualquat.Number
+}
+
+func (q *DualQuaternion) Orientation() Orientation {
+	return (*Quaternion)(&q.Real)
+}
+
+func (q *DualQuaternion) Point() r3.Vector {
+	tQuat := dualquat.Mul(q.Number, dualquat.Conj(q.Number)).Dual
+	return r3.Vector{tQuat.Imag, tQuat.Jmag, tQuat.Kmag}
+}
+
+// newDualQuaternion returns a pointer to a new dualQuaternion object whose Quaternion is an identity Quaternion.
+// Since the real part of a qual quaternion should be a unit quaternion, not all zeroes, this should be used
+// instead of &dualQuaternion{}.
+func newDualQuaternion() *DualQuaternion {
+	return &DualQuaternion{dualquat.Number{
+		Real: quat.Number{Real: 1},
+		Dual: quat.Number{},
+	}}
+}
+func NewZeroPose() Pose {
+	return newDualQuaternion()
+}
+
+type Path []referenceframe.FrameSystemPoses
+type Trajectory []referenceframe.FrameSystemInputs
+type SimplePlan struct {
+	path Path
+	traj Trajectory
+}
+
+func (plan *SimplePlan) Path() Path {
+	return plan.path
+}
+
+func TrajectoryFromLinearInputs(inps []*referenceframe.LinearInputs) Trajectory {
+	ret := make(Trajectory, len(inps))
+	for idx, inp := range inps {
+		ret[idx] = inp.ToFrameSystemInputs()
 	}
-	r4.RX /= norm
-	r4.RY /= norm
-	r4.RZ /= norm
+
+	return ret
 }
 
-func (r4 *R4AA) ToQuat() quat.Number {
-	sinA := math.Sin(r4.Theta / 2)
-	// Ensure that point xyz is on the unit sphere
-	r4.Normalize()
-
-	// Get the unit-sphere components
-	ax := r4.RX * sinA
-	ay := r4.RY * sinA
-	az := r4.RZ * sinA
-	w := math.Cos(r4.Theta / 2)
-	return quat.Number{w, ax, ay, az}
-}
-
-type OrientationVector struct {
-	Theta float64 `json:"th"`
-	OX    float64 `json:"x"`
-	OY    float64 `json:"y"`
-	OZ    float64 `json:"z"`
-}
-
-// QuatToOV converts a quaternion to an orientation vector.
-func QuatToOV(q quat.Number) *OrientationVector {
-	xAxis := quat.Number{0, -1, 0, 0}
-	zAxis := quat.Number{0, 0, 0, 1}
-	ov := &OrientationVector{}
-	// Get the transform of our +X and +Z points
-	newX := quat.Mul(quat.Mul(q, xAxis), quat.Conj(q))
-	newZ := quat.Mul(quat.Mul(q, zAxis), quat.Conj(q))
-	ov.OX = newZ.Imag
-	ov.OY = newZ.Jmag
-	ov.OZ = newZ.Kmag
-
-	// The contents of ov.newX.Kmag are not in radians but we can use angleEpsilon anyway to check how close we are to
-	// the pole because it's a convenient small number
-	if 1-math.Abs(newZ.Kmag) > orientationVectorPoleRadius {
-		v1 := mgl64.Vec3{newZ.Imag, newZ.Jmag, newZ.Kmag}
-		v2 := mgl64.Vec3{newX.Imag, newX.Jmag, newX.Kmag}
-
-		// Get the vector normal to the local-x, local-z, origin plane
-		norm1 := v1.Cross(v2)
-
-		// Get the vector normal to the global-z, local-z, origin plane
-		norm2 := v1.Cross(mgl64.Vec3{zAxis.Imag, zAxis.Jmag, zAxis.Kmag})
-
-		// For theta, we find the angle between the planes defined by local-x, global-z, origin and local-x, local-z, origin
-		cosTheta := norm1.Dot(norm2) / (norm1.Len() * norm2.Len())
-		// Account for floating point error
-		if cosTheta > 1 {
-			cosTheta = 1
-		}
-		if cosTheta < -1 {
-			cosTheta = -1
-		}
-
-		theta := math.Acos(cosTheta)
-		if theta > orientationVectorPoleRadius {
-			// Acos will always produce a positive number, we need to determine directionality of the angle
-			// We rotate newZ by -theta around the newX axis and see if we wind up coplanar with local-x, global-z, origin
-			// If so theta is negative, otherwise positive
-			// An R4AA is a convenient way to rotate a point by an amount around an arbitrary axis
-			aa := R4AA{-theta, ov.OX, ov.OY, ov.OZ}
-			q2 := aa.ToQuat()
-			testZ := quat.Mul(quat.Mul(q2, zAxis), quat.Conj(q2))
-			norm3 := v1.Cross(mgl64.Vec3{testZ.Imag, testZ.Jmag, testZ.Kmag})
-			cosTest := norm1.Dot(norm3) / (norm1.Len() * norm3.Len())
-			if 1-cosTest < defaultAngleEpsilon*defaultAngleEpsilon {
-				ov.Theta = -theta
-			} else {
-				ov.Theta = theta
+func NewSimplePlanFromTrajectory(
+	trajAsInputs []*referenceframe.LinearInputs, fs *referenceframe.FrameSystem,
+) (*SimplePlan, error) {
+	path := Path{}
+	for _, inputNode := range trajAsInputs {
+		poseMap := make(map[string]*referenceframe.PoseInFrame)
+		for frame := range inputNode.Keys() {
+			tf, err := fs.Transform(inputNode, referenceframe.NewPoseInFrame(frame, spatialmath.NewZeroPose()), referenceframe.World)
+			if err != nil {
+				return nil, err
 			}
-		} else {
-			ov.Theta = 0
+			pose, ok := tf.(*referenceframe.PoseInFrame)
+			if !ok {
+				return nil, fmt.Errorf("pose not transformable")
+			}
+			poseMap[frame] = pose
 		}
-	} else {
-		// Special case for when we point directly along the Z axis
-		// Get the vector normal to the local-x, global-z, origin plane
-		ov.Theta = -math.Atan2(newX.Jmag, -newX.Imag)
-		if newZ.Kmag < 0 {
-			ov.Theta = -math.Atan2(newX.Jmag, newX.Imag)
-		}
-	}
-	// the IEEE 754 Standard for Floating-Points allows both negative and positive zero representations.
-	// If one of the above conditions casts ov.Theta to -0, transform it to +0 for consistency.
-	// String comparisons of floating point numbers may fail otherwise.
-	if ov.Theta == -0. {
-		ov.Theta = 0.
+		path = append(path, poseMap)
 	}
 
-	return ov
+	return &SimplePlan{path: path, traj: TrajectoryFromLinearInputs(trajAsInputs)}, nil
+}
+
+type Orientation interface {
+}
+
+func (path Path) GetFramePoses(frameName string) ([]Pose, error) {
+	poses := []Pose{}
+	for _, step := range path {
+		poseInFrame, ok := step[frameName]
+		if !ok {
+			return nil, fmt.Errorf("frame named %s not found in path", frameName)
+		}
+		pose := poseInFrame.Pose().(Pose)
+		poses = append(poses, pose)
+	}
+	return poses, nil
+}
+
+func GetPosesFromTrajectory(
+	fs *referenceframe.FrameSystem,
+	trajectory Trajectory,
+	frameName string,
+) ([]Pose, error) {
+	linearInputs := []*referenceframe.LinearInputs{}
+	for _, trajInput := range trajectory {
+		linearInputs = append(linearInputs, trajInput.ToLinearInputs())
+	}
+	sp, err := NewSimplePlanFromTrajectory(linearInputs, fs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create simple plan from trajectory: %w", err)
+	}
+
+	poses, err := sp.Path().GetFramePoses(frameName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get frame poses: %w", err)
+	}
+
+	return poses, nil
 }

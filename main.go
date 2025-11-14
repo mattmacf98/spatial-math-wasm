@@ -4,27 +4,26 @@ package main
 import (
 	"syscall/js"
 
-	"gonum.org/v1/gonum/num/quat"
+	"go.viam.com/rdk/motionplan"
+	"go.viam.com/rdk/referenceframe"
 )
 
-func quatToOv(this js.Value, args []js.Value) any {
-	w := args[0].Float()
-	x := args[1].Float()
-	y := args[2].Float()
-	z := args[3].Float()
+func getPosesFromTrajectory(this js.Value, args []js.Value) any {
+	frameSystem := args[0].Interface().(*referenceframe.FrameSystem)
+	trajectory := args[1].Interface().(*motionplan.Trajectory)
+	frameName := args[2].String()
 
-	q := quat.Number{Real: w, Imag: x, Jmag: y, Kmag: z}
-	ov := QuatToOV(q)
+	poses, err := GetPosesFromTrajectory(frameSystem, trajectory, frameName)
+	if err != nil {
+		return js.ValueOf(map[string]any{
+			"error": err.Error(),
+		})
+	}
 
-	return js.ValueOf(map[string]any{
-		"theta": ov.Theta,
-		"ox":    ov.OX,
-		"oy":    ov.OY,
-		"oz":    ov.OZ,
-	})
+	return js.ValueOf(poses)
 }
 
 func main() {
-	js.Global().Set("quatToOv", js.FuncOf(quatToOv))
+	js.Global().Set("getPosesFromTrajectory", js.FuncOf(getPosesFromTrajectory))
 	select {}
 }
