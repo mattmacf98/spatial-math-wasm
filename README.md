@@ -39,7 +39,9 @@ The important processes are:
 
    We could probably refactor a lot of the functions we need out or mark files as not to be compiled for WASM in RDK, but this will require significant work.
 
+   I created a minimum working version, a lot of the work was around removing references to `go.viam.com/utils` for simple math conversions and logging. There was also a decent amount of test removing since they used some file loading things in `go.viam.com/utils` as well.
+
 ## TODO
 
+- [ ] local running webapp to run poses from trajs
 - [ ] Try to make `useWasm` a hook
-- [ ] Assess what actual functions we need to call for our P0 scope
