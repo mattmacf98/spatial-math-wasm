@@ -15,7 +15,7 @@ The important processes are:
 1. Build the WASM binary:
 
    ```bash
-   GOOS=js GOARCH=wasm go build -o main.wasm
+   GOOS=js GOARCH=wasm go build -o ./spatial-math-wasm-web/static/main.wasm
    ```
 
 2. Copy the WASM JavaScript runtime:

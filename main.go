@@ -33,20 +33,25 @@ func GetPosesFromTrajectory(
 }
 
 func getPosesFromTrajectory(this js.Value, args []js.Value) any {
-	// Take the frameSystem as a JSON string and unmarshal into FrameSystem
-	frameSystemJSON := args[0].String()
-	var frameSystem referenceframe.FrameSystem
-	err := json.Unmarshal([]byte(frameSystemJSON), &frameSystem)
-	if err != nil {
-		panic(fmt.Sprintf("failed to unmarshal FrameSystem: %v", err))
-	}
 	trajectoryJSON := args[1].String()
-	var trajectory motionplan.Trajectory
-	err = json.Unmarshal([]byte(trajectoryJSON), &trajectory)
+	fmt.Println("trajectoryJSON", trajectoryJSON)
+	var trajectoryJSONValue map[string][]float64
+	err := json.Unmarshal([]byte(trajectoryJSON), &trajectoryJSONValue)
 	if err != nil {
 		panic(fmt.Sprintf("failed to unmarshal Trajectory: %v", err))
 	}
+	var trajectory motionplan.Trajectory
+
 	frameName := args[2].String()
+	fmt.Println("frameName", frameName)
+
+	frameSystemJSON := args[0].String()
+	fmt.Println("frameSystemJSON", frameSystemJSON)
+	var frameSystem referenceframe.FrameSystem
+	err = json.Unmarshal([]byte(frameSystemJSON), &frameSystem)
+	if err != nil {
+		panic(fmt.Sprintf("failed to unmarshal FrameSystem: %v", err))
+	}
 
 	poses, err := GetPosesFromTrajectory(&frameSystem, trajectory, frameName)
 	if err != nil {
