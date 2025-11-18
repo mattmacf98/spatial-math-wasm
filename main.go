@@ -33,25 +33,29 @@ func GetPosesFromTrajectory(
 }
 
 func getPosesFromTrajectory(this js.Value, args []js.Value) any {
-	trajectoryJSON := args[1].String()
-	fmt.Println("trajectoryJSON", trajectoryJSON)
-	var trajectoryJSONValue map[string][]float64
-	err := json.Unmarshal([]byte(trajectoryJSON), &trajectoryJSONValue)
-	if err != nil {
-		panic(fmt.Sprintf("failed to unmarshal Trajectory: %v", err))
-	}
-	var trajectory motionplan.Trajectory
-
+	frameSystemString := args[0].String()
+	trajectoryString := args[1].String()
 	frameName := args[2].String()
-	fmt.Println("frameName", frameName)
 
-	frameSystemJSON := args[0].String()
-	fmt.Println("frameSystemJSON", frameSystemJSON)
+	fmt.Printf("got here 1\n")
+
 	var frameSystem referenceframe.FrameSystem
-	err = json.Unmarshal([]byte(frameSystemJSON), &frameSystem)
+	err := json.Unmarshal([]byte(frameSystemString), &frameSystem)
 	if err != nil {
-		panic(fmt.Sprintf("failed to unmarshal FrameSystem: %v", err))
+		return fmt.Errorf("failed to unmarshal frame system: %w", err)
 	}
+	fmt.Printf("got here 2\n")
+
+	var trajectory motionplan.Trajectory
+	err = json.Unmarshal([]byte(trajectoryString), &trajectory)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal trajectory: %w", err)
+	}
+	fmt.Printf("got here 3\n")
+
+	fmt.Printf("FRAME SYSTEM: %v\n", frameSystem)
+	fmt.Printf("TRAJECTORY: %v\n", trajectory)
+	fmt.Printf("FRAME NAME: %s\n", frameName)
 
 	poses, err := GetPosesFromTrajectory(&frameSystem, trajectory, frameName)
 	if err != nil {
@@ -59,8 +63,10 @@ func getPosesFromTrajectory(this js.Value, args []js.Value) any {
 			"error": err.Error(),
 		})
 	}
-
-	return js.ValueOf(poses)
+	fmt.Printf("got here 4\n")
+	jsonPoses, _ := json.Marshal(poses)
+	fmt.Printf("JSON POSES: %s\n", string(jsonPoses))
+	return js.Global().Get("JSON").Call("parse", string(jsonPoses))
 }
 
 func main() {
