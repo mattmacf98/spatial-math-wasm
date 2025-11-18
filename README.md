@@ -43,5 +43,10 @@ The important processes are:
 
 ## TODO
 
-- [ ] local running webapp to run poses from trajs
 - [ ] Try to make `useWasm` a hook
+
+## Instructions
+
+1. get a set of `frame_system.json` and `plans.json` from running the sanding cli (or use the ones in the examples directory)
+2. open the console (for this poc I just dumped the output poses in logs)
+3. click the `Get Poses` button and see the first trajectory + frame system gets converted into a list of poses (to change what # trajectory gets converted change the indices into trajectories and trajectory in the `testWasm` function in `+page.svelte`)
